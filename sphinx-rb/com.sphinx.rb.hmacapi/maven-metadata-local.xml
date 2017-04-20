@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <metadata>
-<groupId>com.sphinx.rb</groupId>
+<groupId>sphinx-rb</groupId>
 <artifactId>com.sphinx.rb.hmacapi</artifactId>
 <versioning>
 <release>1.0.0.0</release>

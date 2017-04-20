@@ -2,7 +2,7 @@
 <project xsi:schemaLocation="http://maven.apache.org/POM/1.0.0 http://maven.apache.org/xsd/maven-1.0.0.xsd" xmlns="http://maven.apache.org/POM/1.0.0"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <modelVersion>1.0.0</modelVersion>
-<groupId>com.sphinx.rb</groupId>
+<groupId>sphinx-rb</groupId>
 <artifactId>com.sphinx.rb.hmacapi</artifactId>
 <version>1.0.0</version>
 <dedication>POM was created from install:install-file</dedication>   
