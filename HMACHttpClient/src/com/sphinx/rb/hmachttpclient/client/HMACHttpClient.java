@@ -1,6 +1,5 @@
 package com.sphinx.rb.hmachttpclient.client;
 
-
 import com.sphinx.rb.hmacapi.exception.HMACException;
 import com.sphinx.rb.hmacapi.exception.HMACHashException;
 import com.sphinx.rb.hmacapi.exception.HMACKeyException;
@@ -15,6 +14,8 @@ import java.net.HttpURLConnection;
 import java.net.ProtocolException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,11 +25,11 @@ public class HMACHttpClient {
     public static final int HMAC_URI = 1;
 
     public static final int VERSION = 1;
-    
+
     public static final String HEADER_NAME = "HMAC-Authentication";
     public static final String HEADER_NAME_SESSION = "HMAC-Authentication-Session";
     public static final String URI_PARAM_NAME = "hmacauthentication";
-    
+
     public static final String GET = "GET";
     public static final String POST = "POST";
     public static final String PUT = "PUT";
@@ -37,7 +38,7 @@ public class HMACHttpClient {
     public static final String HEAD = "HEAD";
     public static final String TRACE = "TRACE";
 
-    protected int hmacMode = this.HMAC_HEADER;
+    protected int hmacMode = HMACHttpClient.HMAC_HEADER;
 
     static HttpURLConnection requestGlobal = null;
 
@@ -45,8 +46,11 @@ public class HMACHttpClient {
 
     String method = "GET";
 
+    private Map<String, String> headers = null;
+
     public HMACHttpClient(URL url) throws IOException, URISyntaxException {
         this.url = url.toURI().toString();
+        this.headers = new LinkedHashMap<>();
         requestGlobal = (HttpURLConnection) url.openConnection();
     }
 
@@ -100,7 +104,7 @@ public class HMACHttpClient {
      * @throws RuntimeException
      */
     protected void _startSession() throws IOException, HMACException, URISyntaxException {
-        
+
         HttpURLConnection sessionRequest = (HttpURLConnection) new URL(url).openConnection();
 
         sessionRequest.setRequestMethod(this.method);
@@ -115,15 +119,14 @@ public class HMACHttpClient {
          */
         this._sign(sessionRequest, true);
 
-        
         if (!this.method.equalsIgnoreCase(HMACHttpClient.GET)) {
-            
+
             sessionRequest.setDoOutput(true);
             DataOutputStream httpout = new DataOutputStream(sessionRequest.getOutputStream());
             httpout.write("".getBytes());
-            
+
         }
-        
+
         if (cookies == null) {
             cookies = sessionRequest.getHeaderFields().get("Set-Cookie");
         }
@@ -327,6 +330,10 @@ public class HMACHttpClient {
         return uri;
     }
 
+    public String getUrl() {
+        return this.url;
+    }
+
     public String getSignedUri() {
         return this.hmacSignedUriString;
     }
@@ -417,7 +424,7 @@ public class HMACHttpClient {
      *
      * @return Retorna uma string com a resposta da requisição ou null, caso
      * haja falha na requisição.
-     * 
+     *
      * @throws java.io.IOException
      * @throws com.sphinx.rb.hmacapi.exception.HMACException
      * @throws java.net.URISyntaxException
@@ -481,6 +488,11 @@ public class HMACHttpClient {
             }
         }
         requestGlobal.setDoOutput(true);
+
+        // Seta os Headers
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            requestGlobal.setRequestProperty(entry.getKey(), entry.getValue());
+        }
 
         if (!this.method.equalsIgnoreCase(HMACHttpClient.GET)) {
 
@@ -645,6 +657,10 @@ public class HMACHttpClient {
 
     public Map<String, List<String>> getHeaderFields() {
         return requestGlobal.getHeaderFields();
+    }
+
+    public void setRequestProperty(String key, String value) {
+        headers.put(key, value);
     }
 
 }
