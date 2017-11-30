@@ -7,29 +7,33 @@ import com.sphinx.rb.hmacapi.hmac.HMAC;
 import com.sphinx.rb.hmacapi.hmac.HMACSession;
 import com.sphinx.rb.hmachttpclient.util.JSONObject;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.ProtocolException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.HashMap;
+import java.net.URLConnection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 public class HMACHttpClient {
-
+    
     public static final int HMAC_HEADER = 0;
     public static final int HMAC_URI = 1;
-
+    
     public static final int VERSION = 1;
-
+    
     public static final String HEADER_NAME = "HMAC-Authentication";
     public static final String HEADER_NAME_SESSION = "HMAC-Authentication-Session";
     public static final String URI_PARAM_NAME = "hmacauthentication";
-
+    
     public static final String GET = "GET";
     public static final String POST = "POST";
     public static final String PUT = "PUT";
@@ -37,22 +41,14 @@ public class HMACHttpClient {
     public static final String OPTIONS = "OPTIONS";
     public static final String HEAD = "HEAD";
     public static final String TRACE = "TRACE";
-
+    
     protected int hmacMode = HMACHttpClient.HMAC_HEADER;
-
-    static HttpURLConnection requestGlobal = null;
-
+    
+    HttpURLConnection requestGlobal = null;
+    
     List<String> cookies = null;
-
+    
     String method = "GET";
-
-    private Map<String, String> headers = null;
-
-    public HMACHttpClient(URL url) throws IOException, URISyntaxException {
-        this.url = url.toURI().toString();
-        this.headers = new LinkedHashMap<>();
-        requestGlobal = (HttpURLConnection) url.openConnection();
-    }
 
     /**
      *
@@ -80,17 +76,52 @@ public class HMACHttpClient {
      * @var bool
      */
     protected boolean hmacSignedUri = false;
-
+    
     protected String hmacSignedUriString = null;
-
+    
     protected String message = "";
-
+    
     protected String response = "";
-
+    
     protected int responseCode = 0;
-
+    
     protected String url = null;
+    
+    private void init() throws URISyntaxException {
+        if (requestGlobal.getRequestMethod().length() > 0) {
+            method = requestGlobal.getRequestMethod();
+        }
+        
+        url = requestGlobal.getURL().toURI().toString();
+    }
 
+    /**
+     * Inicializa com URL
+     *
+     * @param url
+     * @throws IOException
+     * @throws URISyntaxException
+     */
+    public HMACHttpClient(URLConnection url) throws IOException, URISyntaxException {
+        
+        requestGlobal = (HttpURLConnection) url;
+        
+        init();
+    }
+
+    /**
+     * Incializa com string
+     *
+     * @param url
+     * @throws IOException
+     * @throws URISyntaxException
+     */
+    public HMACHttpClient(String url) throws IOException, URISyntaxException {
+        requestGlobal = (HttpURLConnection) new URL(url).openConnection();
+        
+        init();
+    }
+    
     public int getResponseCode() {
         return responseCode;
     }
@@ -104,9 +135,9 @@ public class HMACHttpClient {
      * @throws RuntimeException
      */
     protected void _startSession() throws IOException, HMACException, URISyntaxException {
-
+        
         HttpURLConnection sessionRequest = (HttpURLConnection) new URL(url).openConnection();
-
+        
         sessionRequest.setRequestMethod(this.method);
 
         /**
@@ -118,15 +149,15 @@ public class HMACHttpClient {
          * Assinatura de início de sessão (igual assinatura sem sessão)
          */
         this._sign(sessionRequest, true);
-
+        
         if (!this.method.equalsIgnoreCase(HMACHttpClient.GET)) {
-
+            
             sessionRequest.setDoOutput(true);
             DataOutputStream httpout = new DataOutputStream(sessionRequest.getOutputStream());
             httpout.write("".getBytes());
-
+            
         }
-
+        
         if (cookies == null) {
             cookies = sessionRequest.getHeaderFields().get("Set-Cookie");
         }
@@ -151,16 +182,16 @@ public class HMACHttpClient {
          * Recuperar header com assinatura HMAC
          */
         String headers = sessionRequest.getHeaderField(HEADER_NAME);
-
+        
         if (headers == null) {
             throw new RuntimeException("HMAC não está presente na resposta");
         }
-
+        
         String[] headerData = headers.split(":");//explode(':', header);
         if (headerData.length != 3) {
             throw new RuntimeException("HMAC da resposta é inválido (header incorreto)");
         }
-
+        
         String versao = headerData[0];
         String nonce2 = headerData[1];
         String assinatura = headerData[2];
@@ -185,7 +216,7 @@ public class HMACHttpClient {
          */
         this.hmac.startSession();
         this.hmacSession = true;
-
+        
     }
 
     /**
@@ -200,7 +231,7 @@ public class HMACHttpClient {
      * @throws RuntimeException
      */
     protected void _sign(HttpURLConnection request, boolean startSession) throws URISyntaxException, IOException, HMACKeyException, HMACHashException {
-
+        
         if (this.hmacContador > 0) {
             throw new RuntimeException("HMAC sem sessão só pode enviar uma mensagem");
         }
@@ -217,7 +248,7 @@ public class HMACHttpClient {
          * Assinatura HMAC
          */
         String assinaturaHmac = null;
-
+        
         if (this.hmac instanceof HMACSession) {
             assinaturaHmac = this.hmac.getHmac(assinarDados, HMACSession.SESSION_REQUEST);
         } else {
@@ -232,7 +263,7 @@ public class HMACHttpClient {
                 + ":" + assinaturaHmac;                // HMAC Hash
 
         request.setRequestProperty(HEADER_NAME, headerAuth);
-
+        
     }
 
     /**
@@ -260,7 +291,7 @@ public class HMACHttpClient {
      * @throws RuntimeException
      */
     protected void _signUri(HttpURLConnection request) throws URISyntaxException, IOException, HMACKeyException, HMACHashException {
-
+        
         if (this.hmacContador > 0) {
             throw new RuntimeException("HMAC sem sessão só pode enviar uma mensagem");
         }
@@ -269,7 +300,7 @@ public class HMACHttpClient {
          * Gera URI assinada
          */
         this.getSignedUri(request);
-
+        
     }
 
     /**
@@ -287,7 +318,7 @@ public class HMACHttpClient {
         if (this.hmacSignedUri) {
             return this.hmacSignedUriString;
         }
-
+        
         if (this.hmac == null) {
             throw new RuntimeException("HMAC é necessário para a requisição");
         }
@@ -295,9 +326,12 @@ public class HMACHttpClient {
         /**
          * Dados a assinar (versão 1 do protocolo)
          */
-        String assinarDados = request.getURL().toURI()
-                + ((this.message != null && !this.message.isEmpty()) ? (("" + request.getURL().toURI()).contains("?") ? "&" : "?") : "")
-                + this.message;   // URI
+//        String assinarDados = request.getURL().toURI()
+//                + ((this.message != null && !this.message.isEmpty()) ? (("" + request.getURL().toURI()).contains("?") ? "&" : "?") : "")
+//                + this.message;   // URI
+        String assinarDados = request.getURL().toURI().toString()
+                + (request.getURL().toURI().toString().contains("?") ? "&" : "?")
+                + "_=" + System.currentTimeMillis() / 1000L;   // URI
 
         /**
          * Assinatura HMAC
@@ -318,22 +352,18 @@ public class HMACHttpClient {
         /**
          * Acrescentar parâmetro HMAC na URI original
          */
-        this.message += "&" + this.URI_PARAM_NAME + "=" + authParam;//.setParams(queryString);
-
-        String uri = request.getURL().toURI().toString()
-                + ((this.message != null && !this.message.isEmpty()) ? (("" + request.getURL().toURI().toString()).contains("?") ? "&" : "?") : "")
-                + message;   // URI
+        String uri = assinarDados + "&" + URI_PARAM_NAME + "=" + authParam;   // URI
 
         this.hmacSignedUriString = uri;
         this.hmacSignedUri = true;
-
+        
         return uri;
     }
-
+    
     public String getUrl() {
         return this.url;
     }
-
+    
     public String getSignedUri() {
         return this.hmacSignedUriString;
     }
@@ -369,7 +399,7 @@ public class HMACHttpClient {
                 + ":" + assinaturaHmac;                // HMAC Hash
 
         request.setRequestProperty(this.HEADER_NAME, headerAuth);
-
+        
     }
 
     /**
@@ -385,17 +415,17 @@ public class HMACHttpClient {
          * Recuperar header com assinatura HMAC
          */
         String headers = response.getHeaderField(this.HEADER_NAME);
-
+        
         if (headers == null || headers.length() <= 0) {
             throw new RuntimeException("HMAC não está presente na resposta");
         }
-
+        
         String[] headerData = headers.split(":");
-
+        
         if (headerData.length != 2) {
             throw new RuntimeException("HMAC da resposta é inválido (header incorreto)");
         }
-
+        
         String versao = headerData[0];
         String assinatura = headerData[1];
 
@@ -414,7 +444,7 @@ public class HMACHttpClient {
         } else {
             this.hmac.validate(this.response, assinatura);
         }
-
+        
     }
 
     /**
@@ -430,14 +460,13 @@ public class HMACHttpClient {
      * @throws java.net.URISyntaxException
      */
     public String send() throws IOException, HMACException, URISyntaxException {
-
+        
         String detalhes;
-
+        
         if (this.hmac == null) {
             throw new RuntimeException("HMAC é necessário para a requisição");
         }
-
-        requestGlobal = (HttpURLConnection) new URL(url).openConnection();
+        
         requestGlobal.setRequestMethod(this.method);
 
         /**
@@ -455,7 +484,7 @@ public class HMACHttpClient {
              * Assinar requisição
              */
             this._signSession(requestGlobal);
-
+            
         } else {
 
             /**
@@ -464,45 +493,51 @@ public class HMACHttpClient {
             switch (this.hmacMode) {
                 case HMAC_URI:
                     this._signUri(requestGlobal);
+                    
+                    HttpURLConnection oldRequest = requestGlobal;
+
+                    // URL assinada com HMAC
+                    requestGlobal = (HttpURLConnection) new URL(hmacSignedUriString).openConnection();
+                    requestGlobal.setRequestMethod(oldRequest.getRequestMethod());
+
+                    // Carrega properties da request antiga
+                    for (final Entry<String, List<String>> prop : oldRequest.getRequestProperties().entrySet()) {
+                        final String key = prop.getKey();
+                        for (final String value : prop.getValue()) {
+                            requestGlobal.setRequestProperty(key, value);
+                        }
+                    }
+
+                    // Descarrega oldRequest
+                    oldRequest = null;
+                    
                     break;
                 case HMAC_HEADER:
                 default:
                     this._sign(requestGlobal);
             }
-
+            
         }
-
-        /**
-         * Enviar requisição
-         */
-        if (this.method.equalsIgnoreCase(HMACHttpClient.GET)) {
-            url = hmacSignedUriString;
-            requestGlobal = (HttpURLConnection) new URL(url).openConnection();
-        }
-
+        
         StringBuilder body = new StringBuilder();
-
+        
         if (cookies != null) {
             for (String cookie : cookies) {
                 requestGlobal.setRequestProperty("Cookie", cookie);
             }
         }
+        
         requestGlobal.setDoOutput(true);
-
-        // Seta os Headers
-        for (Map.Entry<String, String> entry : headers.entrySet()) {
-            requestGlobal.setRequestProperty(entry.getKey(), entry.getValue());
-        }
-
+        
         if (!this.method.equalsIgnoreCase(HMACHttpClient.GET)) {
-
+            
             DataOutputStream httpOut = new DataOutputStream(requestGlobal.getOutputStream());
             httpOut.write(this.message.getBytes("UTF-8"));
             httpOut.flush();
             httpOut.close();
-
+            
         }
-
+        
         if (cookies == null) {
             cookies = requestGlobal.getHeaderFields().get("Set-Cookie");
         }
@@ -514,14 +549,18 @@ public class HMACHttpClient {
         try {
             br = new BufferedReader(new InputStreamReader(requestGlobal.getInputStream()));
         } catch (Exception e) {
-            br = new BufferedReader(new InputStreamReader(requestGlobal.getErrorStream()));
+            InputStream stream = requestGlobal.getErrorStream() != null
+                    ? requestGlobal.getErrorStream()
+                    : new ByteArrayInputStream("".getBytes());
+            
+            br = new BufferedReader(new InputStreamReader(stream));
         }
         String line = "";
         while ((line = br.readLine()) != null) {
             body.append(line);
         }
         br.close();
-
+        
         response = body.toString();
 
         /**
@@ -530,15 +569,15 @@ public class HMACHttpClient {
         responseCode = requestGlobal.getResponseCode();
         if (responseCode == 401) {
             detalhes = "";
-
+            
             JSONObject json = new JSONObject(body.toString());
-
+            
             if (json.length() <= 0) {
                 /**
                  * Erro 401 não gerado pelo HMAC no servidor
                  */
                 detalhes = body.toString();
-
+                
             } else if (!json.has("detail")) {
                 /**
                  * JSON não foi gerado pelo HMAC Server
@@ -555,7 +594,7 @@ public class HMACHttpClient {
                     if (this.hmac instanceof HMACSession) {
                         detalhes += " (sessão HMAC expirou)";
                     } else {
-                        detalhes += " (servidor requer HMAC com sessão)";
+                        detalhes += " (servidor requer HMAC com sessão ou a forma de autenticação está incorreta)";
                     }
                 } else if (detalhes.contains("5 - Sessão HMAC não iniciada")) {
                     if (this.hmac instanceof HMACSession) {
@@ -572,7 +611,7 @@ public class HMACHttpClient {
                     detalhes += " ['" + json.optString("hmac") + "', v'" + json.optString("version") + "']";
                 }
             }
-
+            
             throw new RuntimeException("Erro HMAC remoto: " + detalhes + " - Code :" + 401);
         }
 
@@ -580,7 +619,7 @@ public class HMACHttpClient {
          * Verificar assinatura da resposta, se for resposta de sucesso (2xx)
          */
         if (requestGlobal.getResponseCode() >= 200 && requestGlobal.getResponseCode() <= 299) {
-
+            
             this._verify(requestGlobal);
         }
 
@@ -593,19 +632,19 @@ public class HMACHttpClient {
         }
         return body.toString();
     }
-
+    
     public void setRawBody(String messageToSend) {
         this.message = messageToSend;
     }
-
+    
     public String getResponse() {
         return this.response;
     }
-
+    
     public List<String> getCookies() {
         return this.cookies;
     }
-
+    
     public void setCookies(List<String> cookies) {
         this.cookies = cookies;
     }
@@ -645,22 +684,31 @@ public class HMACHttpClient {
     public int getHmacMode() {
         return this.hmacMode;
     }
-
+    
     public String getMethod() {
         return requestGlobal.getRequestMethod();
     }
-
-    public void setMethod(String method) throws ProtocolException {
+    
+    public void setRequestMethod(String method) throws ProtocolException {
         this.method = method;
         requestGlobal.setRequestMethod(method);
     }
 
+    /**
+     * @deprecated use setRequestMethod
+     * @param method
+     * @throws ProtocolException
+     */
+    public void setMethod(String method) throws ProtocolException {
+        this.setRequestMethod(method);
+    }
+    
     public Map<String, List<String>> getHeaderFields() {
         return requestGlobal.getHeaderFields();
     }
-
+    
     public void setRequestProperty(String key, String value) {
-        headers.put(key, value);
+        requestGlobal.setRequestProperty(key, value);
     }
-
+    
 }
